@@ -1,0 +1,247 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#define ONE 1
+/* void init_pwm()
+{
+    TCCR0A|=((1<<COM0A1)|(1<< WGM00)|(1<<WGM01));
+    TCCR0B|=((1<<CS01)|(1<<CS00));
+    TCNT0=0X00;
+   // OCR0A=20;
+}*/
+//void timer0_init();
+//void disable_timer();
+int inIt_fun();
+int PinChng_fun();
+void seat_belt();
+//void PWM_inIt();
+void HVAC_logic();
+void adc_init(void);
+uint16_t adc_read(void);
+int Ign_SW=0,AC_SW =0,SeatBelt_SW=0;
+int adcval=0,pot=0 ;
+
+int main()
+{
+   PinChng_fun();
+  inIt_fun();
+ /*  TCNT0=0x00; 
+   TCCR0A|=0x00; 
+    TCCR0B|=((1<<CS02)|(1<<CS00)); 
+    TIMSK0|=((1<<OCIE0A)|(1<<OCIE0B)); 
+    OCR0A=128;*/
+  Serial.begin(9600);
+   //Serial.begin(9600);
+   
+   //PinChng_fun();
+  //init_pwm();
+  
+   
+ while(1)
+{    
+  Serial.print(Ign_SW);
+  Serial.println(AC_SW);
+   window();
+   if(Ign_SW==1)
+     {
+   
+    PORTB |=(ONE<<PB4); 
+     seat_belt();                    //Yellow LED ON indicates ignition SW is ON 
+    HVAC_logic();
+     }
+   
+    else
+    {
+     PORTB &=~(ONE<<PB4);
+     PORTB &=~(ONE<<PB3);
+     PORTB &=~(ONE<<PB2);
+     PORTB &=~(ONE<<PB5);
+      
+    }
+}
+  
+ return 0;
+
+ }
+
+int inIt_fun()
+{
+  DDRC &=~(ONE<<PC1);  //Temp Sensor
+  DDRB &=~(ONE<<PB0);  //Ign_SW
+  DDRD &=~(ONE<<PD7);  //AC_SW
+  DDRB |=((ONE<<PB2)|(ONE<<PB3)|(ONE<<PB4)|(ONE<<PB5)|(ONE<<PB1));
+  DDRD &=~((ONE<<PD2)|(ONE<<PD3)|(ONE<<PD4));
+  //DDRD&=~((ONE<<PD6));
+  DDRD|=((ONE<<PD6));
+  DDRD|=((ONE<<PD5));
+  SREG|=(ONE<<PD7);
+  
+  
+}
+
+int PinChng_fun()
+{
+  
+  PCICR |=(ONE<<PCIE0);
+  PCMSK0|=(ONE<<PCINT0);
+
+  PCICR |=(ONE<<PCIE2);
+  PCMSK2|=(ONE<<PCINT23);  
+}
+
+void HVAC_logic()
+{
+    adc_init(01); 
+	uint16_t adc_result;
+    adcval = adc_read();
+    Serial.println(adc_result);
+    if(AC_SW==1 && Ign_SW==1)
+    {
+      // PWM_inIt();
+     // PORTB |=(ONE<<PB5);
+      
+      if(adcval>25) // AC
+      {
+      PORTB |= (ONE<<PB3); //Green LED
+      PORTB &=~ (ONE<<PB2); //Red LED
+      }
+      
+      else if(adcval<25)  //Heater
+      {
+        PORTB &=~(ONE<<PB3);
+        PORTB |= (ONE<<PB2); //Red LED
+      }
+            
+       else 
+     {
+        PORTB &=~(ONE<<PB3);
+        PORTB &=~(ONE<<PB2);
+       // PORTB &=~(ONE<<PB5);
+     }
+       adc_init(00);
+  	  uint16_t pot = adc_read();
+      Serial.println("humidity");
+	  Serial.println(pot);      
+  	 
+    if(pot<500)
+    {
+      PORTB |=(ONE<<PB5);
+    }
+     else
+     {
+        PORTB &=~(ONE<<PB5);
+     }
+}
+
+
+
+}    
+void seat_belt()
+{
+if (Ign_SW == 1) 
+    {
+      	Serial.println(" seat occupied");
+        //if (SeatBelt_SW == 0)
+        if(!(PIND&(1<<PD2)))
+        {
+      		_delay_ms(500);
+      		
+              PORTB |= (ONE << PB1);            
+        	  Serial.println("buzzer state");
+        	_delay_ms(500);
+    	}
+      else
+      {
+        Serial.println("seat belt on");
+        PORTB &=~ (ONE << PB1);
+      //	disable_timer();
+      }
+    }
+    else
+    {     
+      PORTB &=~ (ONE << PB1);
+     // disable_timer();
+     }
+  }
+    
+
+void adc_init(int analog)
+{
+	ADMUX = analog; 		
+    ADMUX |= (1<<REFS0); 
+    ADCSRA |= (1<<ADEN);
+    ADCSRA |= (1<<ADEN);
+}
+
+uint16_t adc_read()
+{
+  //start single conversion writing '1' to ADSC
+  ADCSRA |= (1<<ADSC);
+  while(ADCSRA & (1<<ADSC));		//wait until ADC is done reading a value	
+  return ADC;		//get all high bits
+  
+}
+/* void timer0_init()
+{
+	TCCR0A |=(1 << WGM01);                 // FOR CTC
+	OCR0A= 81;                            // FOR 5 mS initialize counter
+	TIMSK0 |= (1 <<  OCIE0A) ;             // ENABLE INTERRUPT 
+  	TCCR0B |= (1 << CS02)|(1 << CS00);
+  //TCCR0B |=(1 << CS00);// FOR PRESCALAR VALUE 1024
+}*/
+
+/*void disable_timer()
+{
+  TIMSK1 &=~ (1 << OCIE1A)& ~(1<<OCIE1B);//PWM off state 
+  TCCR0A = 0x00;
+  TIMSK0 = 0x00;
+  //delay_flag = 0;
+}*/
+ISR(PCINT0_vect) //Ign_ON
+{  
+   Ign_SW=!Ign_SW;
+  
+}
+
+ISR(PCINT2_vect) //AC_ON
+{
+     AC_SW=!AC_SW;
+  
+}
+
+ISR(INT0_vect)
+{
+  SeatBelt_SW=1;
+}
+     
+void window()
+{
+  int obs=0;
+  adc_init(11);
+  obs=adc_read();
+  _delay_ms(500);
+  Serial.println(obs);
+  if(PIND&(1<<PD3))//up
+  {
+    if(obs>500)
+    {
+       PORTD&=~(ONE<<PD6);
+    }
+    else
+    {
+    PORTD|=((ONE<<PD6));
+    PORTD&=~(ONE<<PD5);
+    }
+  }
+  else if(PIND&(1<<PD4))//down
+  {
+    PORTD|=((ONE<<PD5));
+     PORTD&=~(ONE<<PD6);
+  }
+  else
+  {
+     PORTD&=~(ONE<<PD5);
+     PORTD&=~(ONE<<PD6);
+  }
+}
+
